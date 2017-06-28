@@ -6,6 +6,7 @@ import { initMixin } from './mixin'
 import { initExtend } from './extend'
 import { initAssetRegisters } from './assets'
 import { set, del } from '../observer/index'
+import { ASSET_TYPES } from 'shared/constants'
 import builtInComponents from '../components/index'
 
 import {
@@ -16,9 +17,9 @@ import {
   defineReactive
 } from '../util/index'
 
-import { default as Dep, pushTarget, popTarget } from '../observer/dep'
+import Dep, { pushTarget, popTarget } from '../observer/dep'
 import { afterFlush, forceFlush } from '../observer/scheduler'
-import { default as Watcher } from '../observer/watcher'
+import Watcher from '../observer/watcher'
 
 export function initGlobalAPI (Vue: GlobalAPI) {
   // config
@@ -58,7 +59,7 @@ export function initGlobalAPI (Vue: GlobalAPI) {
   Vue.nextTick = nextTick
 
   Vue.options = Object.create(null)
-  config._assetTypes.forEach(type => {
+  ASSET_TYPES.forEach(type => {
     Vue.options[type + 's'] = Object.create(null)
   })
 
