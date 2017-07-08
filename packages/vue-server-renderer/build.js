@@ -25,6 +25,7 @@ function isTrue (v) {
 function isFalse (v) {
   return v === false
 }
+
 /**
  * Check if value is primitive
  */
@@ -52,6 +53,14 @@ function isPlainObject (obj) {
 }
 
 
+
+/**
+ * Check if val is a valid array index.
+ */
+function isValidArrayIndex (val) {
+  var n = parseFloat(val);
+  return n >= 0 && Math.floor(n) === n && isFinite(val)
+}
 
 /**
  * Convert a value to a string that is actually rendered.
@@ -403,9 +412,11 @@ prototypeAccessors.child.get = function () {
 
 Object.defineProperties( VNode.prototype, prototypeAccessors );
 
-var createEmptyVNode = function () {
+var createEmptyVNode = function (text) {
+  if ( text === void 0 ) text = '';
+
   var node = new VNode();
-  node.text = '';
+  node.text = text;
   node.isComment = true;
   return node
 };
@@ -974,8 +985,6 @@ var arrayMethods = Object.create(arrayProto);[
     var inserted;
     switch (method) {
       case 'push':
-        inserted = args;
-        break
       case 'unshift':
         inserted = args;
         break
@@ -1163,7 +1172,7 @@ function defineReactive$$1 (
  * already exist.
  */
 function set (target, key, val) {
-  if (Array.isArray(target) && (typeof key === 'number' || /^\d+$/.test(key))) {
+  if (Array.isArray(target) && isValidArrayIndex(key)) {
     target.length = Math.max(target.length, key);
     target.splice(key, 1, val);
     return val
@@ -1255,7 +1264,7 @@ function mergeData (to, from) {
 /**
  * Data
  */
-strats.data = function (
+function mergeDataOrFn (
   parentVal,
   childVal,
   vm
@@ -1263,15 +1272,6 @@ strats.data = function (
   if (!vm) {
     // in a Vue.extend merge, both should be functions
     if (!childVal) {
-      return parentVal
-    }
-    if (typeof childVal !== 'function') {
-      process.env.NODE_ENV !== 'production' && warn(
-        'The "data" option should be a function ' +
-        'that returns a per-instance value in component ' +
-        'definitions.',
-        vm
-      );
       return parentVal
     }
     if (!parentVal) {
@@ -1284,7 +1284,7 @@ strats.data = function (
     // it has to be a function to pass previous merges.
     return function mergedDataFn () {
       return mergeData(
-        childVal.call(this),
+        typeof childVal === 'function' ? childVal.call(this) : childVal,
         parentVal.call(this)
       )
     }
@@ -1304,6 +1304,28 @@ strats.data = function (
       }
     }
   }
+}
+
+strats.data = function (
+  parentVal,
+  childVal,
+  vm
+) {
+  if (!vm) {
+    if (childVal && typeof childVal !== 'function') {
+      process.env.NODE_ENV !== 'production' && warn(
+        'The "data" option should be a function ' +
+        'that returns a per-instance value in component ' +
+        'definitions.',
+        vm
+      );
+
+      return parentVal
+    }
+    return mergeDataOrFn.call(this, parentVal, childVal)
+  }
+
+  return mergeDataOrFn(parentVal, childVal, vm)
 };
 
 /**
@@ -1383,6 +1405,7 @@ strats.computed = function (parentVal, childVal) {
   extend(ret, childVal);
   return ret
 };
+strats.provide = mergeDataOrFn;
 
 /**
  * Default strategy.
@@ -2476,7 +2499,7 @@ TemplateRenderer.prototype.renderScripts = function renderScripts (context) {
 };
 
 TemplateRenderer.prototype.getUsedAsyncFiles = function getUsedAsyncFiles (context) {
-  if (!context._mappedfiles && context._registeredComponents && this.mapFiles) {
+  if (!context._mappedFiles && context._registeredComponents && this.mapFiles) {
     context._mappedFiles = this.mapFiles(Array.from(context._registeredComponents));
   }
   return context._mappedFiles
@@ -3355,6 +3378,9 @@ function parseHTML (html, options) {
           var commentEnd = html.indexOf('-->');
 
           if (commentEnd >= 0) {
+            if (options.shouldKeepComment) {
+              options.comment(html.substring(4, commentEnd));
+            }
             advance(commentEnd + 3);
             continue
           }
@@ -3495,7 +3521,7 @@ function parseHTML (html, options) {
       }
     }
 
-    var unary = isUnaryTag$$1(tagName) || tagName === 'html' && lastTag === 'head' || !!unarySlash;
+    var unary = isUnaryTag$$1(tagName) || !!unarySlash;
 
     var l = match.attrs.length;
     var attrs = new Array(l);
@@ -3655,6 +3681,7 @@ function parse (
     isUnaryTag: options.isUnaryTag,
     canBeLeftOpenTag: options.canBeLeftOpenTag,
     shouldDecodeNewlines: options.shouldDecodeNewlines,
+    shouldKeepComment: options.comments,
     start: function start (tag, attrs, unary) {
       // check namespace.
       // inherit parent ns if there is one
@@ -3838,6 +3865,13 @@ function parse (
           });
         }
       }
+    },
+    comment: function comment (text) {
+      currentParent.children.push({
+        type: 3,
+        text: text,
+        isComment: true
+      });
     }
   });
   return root
@@ -4285,7 +4319,7 @@ function genFilterCode (key) {
 
 function bind$1 (el, dir) {
   el.wrapData = function (code) {
-    return ("_b(" + code + ",'" + (el.tag) + "'," + (dir.value) + (dir.modifiers && dir.modifiers.prop ? ',true' : '') + ")")
+    return ("_b(" + code + ",'" + (el.tag) + "'," + (dir.value) + "," + (dir.modifiers && dir.modifiers.prop ? 'true' : 'false') + (dir.modifiers && dir.modifiers.sync ? ',true' : '') + ")")
   };
 }
 
@@ -4669,6 +4703,8 @@ function needsNormalization (el) {
 function genNode (node, state) {
   if (node.type === 1) {
     return genElement(node, state)
+  } if (node.type === 3 && node.isComment) {
+    return genComment(node)
   } else {
     return genText(node)
   }
@@ -4678,6 +4714,10 @@ function genText (text) {
   return ("_v(" + (text.type === 2
     ? text.expression // no need for () because already wrapped in _s()
     : transformSpecialNewlines(JSON.stringify(text.text))) + ")")
+}
+
+function genComment (comment) {
+  return ("_e('" + (comment.text) + "')")
 }
 
 function genSlot (el, state) {
@@ -5875,6 +5915,9 @@ function checkProp (
 /*  */
 
 function ensureCtor (comp, base) {
+  if (comp.__esModule && comp.default) {
+    comp = comp.default;
+  }
   return isObject(comp)
     ? base.extend(comp)
     : comp
@@ -6468,28 +6511,26 @@ var Watcher = function Watcher (
  */
 Watcher.prototype.get = function get () {
   pushTarget(this);
+  var value;
+  var vm = this.vm;
   try {
-    var value;
-    var vm = this.vm;
+    value = this.getter.call(vm, vm);
+  } catch (e) {
     if (this.user) {
-      try {
-        value = this.getter.call(vm, vm);
-      } catch (e) {
-        handleError(e, vm, ("getter for watcher \"" + (this.expression) + "\""));
-      }
+      handleError(e, vm, ("getter for watcher \"" + (this.expression) + "\""));
     } else {
-      value = this.getter.call(vm, vm);
+      throw e
     }
+  } finally {
     // "touch" every property so they are all tracked as
     // dependencies for deep watching
     if (this.deep) {
       traverse(value);
     }
-    this.cleanupDeps();
-    return value
-  } finally {
     popTarget();
+    this.cleanupDeps();
   }
+  return value
 };
 
 /**
@@ -7376,6 +7417,9 @@ function renderAsyncComponent (node, isRoot, context) {
   var factory = node.asyncFactory;
 
   var resolve = function (comp) {
+    if (comp.__esModule && comp.default) {
+      comp = comp.default;
+    }
     var ref = node.asyncMeta;
     var data = ref.data;
     var children = ref.children;
@@ -7777,7 +7821,7 @@ function createBundleRunner (entry, files, basedir, runInNewContext) {
         // styles injected by vue-style-loader.
         initialContext = sandbox.__VUE_SSR_CONTEXT__ = {};
         runner = evaluate(entry, sandbox);
-        // On subsequent renders, __VUE_SSR_CONTEXT__ will not be avaialbe
+        // On subsequent renders, __VUE_SSR_CONTEXT__ will not be available
         // to prevent cross-request pollution.
         delete sandbox.__VUE_SSR_CONTEXT__;
         if (typeof runner !== 'function') {
