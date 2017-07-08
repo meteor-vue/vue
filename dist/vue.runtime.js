@@ -2843,7 +2843,7 @@ function forceFlush (maxUpdateCount) {
  * Are we inside a flush?
  */
 function isFlushing () {
-  return flushing;
+  return flushing
 }
 
 /**
