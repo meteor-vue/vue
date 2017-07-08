@@ -2844,6 +2844,13 @@ function forceFlush (maxUpdateCount) {
 }
 
 /**
+ * Are we inside a flush?
+ */
+function isFlushing () {
+  return flushing;
+}
+
+/**
  * Used in watchers to wrap provided getters to set scheduler flags.
  */
 function wrapWatcherGetter (f) {
@@ -4615,6 +4622,7 @@ function initGlobalAPI (Vue) {
     popTarget: popTarget,
     afterFlush: afterFlush,
     forceFlush: forceFlush,
+    isFlushing: isFlushing,
     Watcher: Watcher
   };
 

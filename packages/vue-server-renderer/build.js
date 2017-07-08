@@ -6434,6 +6434,11 @@ function queueWatcher (watcher) {
 
 
 /**
+ * Are we inside a flush?
+ */
+
+
+/**
  * Used in watchers to wrap provided getters to set scheduler flags.
  */
 function wrapWatcherGetter (f) {
