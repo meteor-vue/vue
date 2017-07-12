@@ -765,7 +765,7 @@ Dep.target = null;
 var targetStack = [];
 
 function pushTarget (_target) {
-  if (Dep.target) { targetStack.push(Dep.target); }
+  targetStack.push(Dep.target);
   Dep.target = _target;
 }
 
@@ -2920,7 +2920,7 @@ var Watcher = function Watcher (
 /**
  * Evaluate the getter, and re-collect dependencies.
  */
-Watcher.prototype.get = function get () {
+Watcher.prototype.get = function get (dontCleanupDeps) {
   pushTarget(this);
   var value;
   var vm = this.vm;
@@ -2939,7 +2939,9 @@ Watcher.prototype.get = function get () {
       traverse(value);
     }
     popTarget();
-    this.cleanupDeps();
+    if (!dontCleanupDeps) {
+      this.cleanupDeps();
+    }
   }
   return value
 };
