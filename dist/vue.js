@@ -3721,20 +3721,22 @@ function renderList (
     for (i = 0; i < val; i++) {
       ret[i] = render(i + 1, i);
     }
-  } else if (typeof Symbol !== 'undefined' && Symbol.iterator && val[Symbol.iterator]) {
-    ret = [];
-    var iterator = val[Symbol.iterator]();
-    while (true) {
-      var value = iterator.next();
-      if (value.done) { break }
-      ret.push(render(value.value, ret.length));
-    }
   } else if (isObject(val)) {
-    keys = Object.keys(val);
-    ret = new Array(keys.length);
-    for (i = 0, l = keys.length; i < l; i++) {
-      key = keys[i];
-      ret[i] = render(val[key], key, i);
+    if (typeof Symbol !== 'undefined' && Symbol.iterator && val[Symbol.iterator]) {
+      ret = [];
+      var iterator = val[Symbol.iterator]();
+      while (true) {
+        var value = iterator.next();
+        if (value.done) { break }
+        ret.push(render(value.value, ret.length));
+      }
+    } else {
+      keys = Object.keys(val);
+      ret = new Array(keys.length);
+      for (i = 0, l = keys.length; i < l; i++) {
+        key = keys[i];
+        ret[i] = render(val[key], key, i);
+      }
     }
   }
   if (isDef(ret)) {
