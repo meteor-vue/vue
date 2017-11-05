@@ -2696,7 +2696,8 @@ function mountComponent (
     };
   }
 
-  vm._watcher = new Watcher(vm, updateComponent, noop);
+  vm._watcher = new Watcher(vm, updateComponent, noop, { delayed: true });
+  vm._watcher.get();
   hydrating = false;
 
   // manually mounted instance, call mounted on self
@@ -3109,7 +3110,7 @@ var Watcher = function Watcher (
     }
   }
   this.getter = wrapWatcherGetter(this.getter);
-  this.value = this.lazy
+  this.value = this.lazy || (options && options.delayed)
     ? undefined
     : this.get();
 };

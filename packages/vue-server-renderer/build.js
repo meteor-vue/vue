@@ -6468,7 +6468,7 @@ var Watcher = function Watcher (
     }
   }
   this.getter = wrapWatcherGetter(this.getter);
-  this.value = this.lazy
+  this.value = this.lazy || (options && options.delayed)
     ? undefined
     : this.get();
 };
