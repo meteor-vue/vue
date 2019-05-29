@@ -8,6 +8,7 @@ import {
   warn,
   nextTick,
   devtools,
+  inBrowser,
   handleError
 } from '../util/index'
 
@@ -43,6 +44,32 @@ function resetSchedulerState () {
   waiting = flushing = false
 }
 
+// Async edge case #6566 requires saving the timestamp when event listeners are
+// attached. However, calling performance.now() has a perf overhead especially
+// if the page has thousands of event listeners. Instead, we take a timestamp
+// every time the scheduler flushes and use that for all event listeners
+// attached during that flush.
+export let currentFlushTimestamp = 0
+
+// Async edge case fix requires storing an event listener's attach timestamp.
+let getNow: () => number = Date.now
+
+// Determine what event timestamp the browser is using. Annoyingly, the
+// timestamp can either be hi-res (relative to page load) or low-res
+// (relative to UNIX epoch), so in order to compare time we have to use the
+// same timestamp type when saving the flush timestamp.
+if (
+  inBrowser &&
+  window.performance &&
+  typeof performance.now === 'function' &&
+  document.createEvent('Event').timeStamp <= performance.now()
+) {
+  // if the event timestamp is bigger than the hi-res timestamp
+  // (which is evaluated AFTER) it means the event is using a lo-res timestamp,
+  // and we need to use the lo-res version for event listeners as well.
+  getNow = () => performance.now()
+}
+
 /**
  * Flush the queue and run the watchers.
  */
@@ -57,6 +84,7 @@ function flushSchedulerQueue (maxUpdateCount?: number) {
 
   maxUpdateCount = maxUpdateCount || MAX_UPDATE_COUNT
 
+  currentFlushTimestamp = getNow()
   flushing = true
   let watcher, id
 
@@ -78,6 +106,9 @@ function flushSchedulerQueue (maxUpdateCount?: number) {
       // as we run existing watchers
       for (; index < queue.length; index++) {
         watcher = queue[index]
+        if (watcher.before) {
+          watcher.before()
+        }
         id = watcher.id
         has[id] = null
         watcher.run()
@@ -137,6 +168,11 @@ function flushSchedulerQueue (maxUpdateCount?: number) {
 function requireFlush () {
   if (!waiting) {
     waiting = true
+
+    if (process.env.NODE_ENV !== 'production' && !config.async) {
+      flushSchedulerQueue()
+      return
+    }
     nextTick(flushSchedulerQueue)
   }
 }
@@ -146,7 +182,7 @@ function callUpdatedHooks (queue, endIndex) {
   while (i--) {
     const watcher = queue[i]
     const vm = watcher.vm
-    if (vm._watcher === watcher && vm._isMounted) {
+    if (vm._watcher === watcher && vm._isMounted && !vm._isDestroyed) {
       callHook(vm, 'updated')
     }
   }
